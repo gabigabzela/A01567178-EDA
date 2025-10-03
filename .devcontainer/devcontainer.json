@@ -8,5 +8,6 @@
 				"mechatroner.rainbow-csv"
 			]
 		}
-	}
+	},
+	"postCreateCommand": "pip install -r requirements.txt"
 }
