@@ -51,7 +51,7 @@ st.sidebar.markdown("---")
 # Página principal
 page = st.sidebar.radio(
     "Selecciona una vista:",
-    ["📈 Dashboard Principal", "🔍 Análisis por Tipo", "🗺️ Mapa"]
+    ["📈 Dashboard Principal", "🔍 Análisis por Tipo", "🗺️ Mapa", "🔮 Predicciones"]
 )
 
 st.sidebar.markdown("---")
@@ -75,6 +75,48 @@ df_filtrado = df[
     (df['AÑO'] >= años[0]) &
     (df['AÑO'] <= años[1])
 ]
+
+# Cargar archivos de predicciones
+@st.cache_data
+def load_prediction_data():
+    import json
+    
+    pred_data = {}
+    metricas = {}
+    
+    try:
+        pred_data['negocio'] = pd.read_csv('exportados/Robos a negocios/top_10_prediccion_robos_negocios_enero.csv')
+    except:
+        pred_data['negocio'] = None
+    
+    try:
+        pred_data['vehiculo'] = pd.read_csv('exportados/Robos de vehiculos/top_10_prediccion_robos_vehiculos_enero.csv')
+    except:
+        pred_data['vehiculo'] = None
+    
+    try:
+        pred_data['casa'] = pd.read_csv('exportados/Robos a casa habitacion/top_10_prediccion_robos_casa_habitacion_enero.csv')
+    except:
+        pred_data['casa'] = None
+    
+    try:
+        with open('metricas_modelos.json', 'r') as f:
+            metricas = json.load(f)
+    except:
+        metricas = {}
+    
+    return pred_data, metricas
+
+# Función para obtener coordenadas de cuadrantes
+@st.cache_data
+def get_cuadrante_coords():
+    """Obtiene las coordenadas promedio de cada cuadrante del dataset"""
+    df_full = load_data()
+    coords = df_full.groupby('CUADRANTE')[['LATITUD', 'LONGITUD']].mean().reset_index()
+    return coords
+
+pred_data, metricas_modelos = load_prediction_data()
+cuadrante_coords = get_cuadrante_coords()
 
 # ==================== PÁGINA PRINCIPAL ====================
 if page == "📈 Dashboard Principal":
@@ -419,15 +461,16 @@ elif page == "🗺️ Mapa":
         
         st.subheader(f"📍 Total de puntos en el mapa: {len(df_mapa):,}")
         
+        # Crear mapa con colores por distrito
         fig_scatter = px.scatter_mapbox(
             df_mapa,
             lat='LATITUD',
             lon='LONGITUD',
-            color='TIPO',
+            color='DISTRITO',
             hover_data=['TIPO', 'VIOLENCIA', 'FECHA', 'DISTRITO'],
             zoom=10,
             height=700,
-            title="Ubicación de Robos en Chihuahua"
+            title="Ubicación de Robos en Chihuahua (Coloreado por Distrito)"
         )
         fig_scatter.update_layout(
             mapbox_style='open-street-map',
@@ -485,6 +528,190 @@ elif page == "🗺️ Mapa":
                 st.plotly_chart(fig_vehiculo, use_container_width=True)
     else:
         st.warning("No hay datos geográficos disponibles para el rango seleccionado.")
+
+# ==================== PÁGINA PREDICCIONES ====================
+elif page == "🔮 Predicciones":
+    st.title("🔮 Predicciones de Robos por Modelo")
+    st.markdown("**Modelos entrenados con Redes Neuronales para predicción de robos mensuales por cuadrante**")
+    st.divider()
+    
+    # Crear tabs para cada tipo de robo
+    tab_negocio, tab_vehiculo, tab_casa = st.tabs([
+        "🏪 Robos a Negocio",
+        "🚗 Robos de Vehículo", 
+        "🏠 Robos a Casa Habitación"
+    ])
+    
+    # TAB 1: ROBOS A NEGOCIO
+    with tab_negocio:
+        st.subheader("📊 Predicción - Robos a Negocios")
+        if pred_data['negocio'] is not None and len(pred_data['negocio']) > 0:
+            df_pred_neg = pred_data['negocio']
+            
+            # Obtener métricas
+            r2_neg = metricas_modelos.get('negocio', {}).get('enero', {}).get('r2', 'N/A')
+            mae_neg = metricas_modelos.get('negocio', {}).get('enero', {}).get('mae', 'N/A')
+            
+            # Mostrar información del modelo
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if r2_neg != 'N/A':
+                    st.metric("R² Score", f"{r2_neg:.4f}")
+                else:
+                    st.metric("R² Score", r2_neg)
+            
+            with col2:
+                if mae_neg != 'N/A':
+                    st.metric("MAE", f"{mae_neg:.4f}")
+                else:
+                    st.metric("MAE", mae_neg)
+            
+            with col3:
+                st.metric("Total Cuadrantes", len(df_pred_neg))
+            
+            st.divider()
+            
+            # Mostrar tabla de predicciones
+            st.subheader("Top 10 Cuadrantes - Predicciones")
+            df_display = df_pred_neg.head(10).copy()
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Gráfico de predicciones
+            fig_pred_neg = px.bar(
+                df_display.head(10),
+                x=df_display.columns[1] if len(df_display.columns) > 1 else df_display.columns[0],
+                y=df_display.columns[0],
+                orientation='h',
+                title="Top 10 Cuadrantes por Predicción de Robos a Negocio"
+            )
+            st.plotly_chart(fig_pred_neg, use_container_width=True)
+        else:
+            st.info("No hay datos de predicción disponibles para Robos a Negocio")
+    
+    # TAB 2: ROBOS DE VEHÍCULO
+    with tab_vehiculo:
+        st.subheader("📊 Predicción - Robos de Vehículos")
+        if pred_data['vehiculo'] is not None and len(pred_data['vehiculo']) > 0:
+            df_pred_veh = pred_data['vehiculo']
+            
+            # Obtener métricas
+            r2_veh = metricas_modelos.get('vehiculo', {}).get('enero', {}).get('r2', 'N/A')
+            mae_veh = metricas_modelos.get('vehiculo', {}).get('enero', {}).get('mae', 'N/A')
+            
+            # Mostrar información del modelo
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if r2_veh != 'N/A':
+                    st.metric("R² Score", f"{r2_veh:.4f}")
+                else:
+                    st.metric("R² Score", r2_veh)
+            
+            with col2:
+                if mae_veh != 'N/A':
+                    st.metric("MAE", f"{mae_veh:.4f}")
+                else:
+                    st.metric("MAE", mae_veh)
+            
+            with col3:
+                st.metric("Total Cuadrantes", len(df_pred_veh))
+            
+            st.divider()
+            
+            # Mostrar tabla de predicciones
+            st.subheader("Top 10 Cuadrantes - Predicciones")
+            df_display = df_pred_veh.head(10).copy()
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Gráfico de predicciones
+            fig_pred_veh = px.bar(
+                df_display.head(10),
+                x=df_display.columns[1] if len(df_display.columns) > 1 else df_display.columns[0],
+                y=df_display.columns[0],
+                orientation='h',
+                title="Top 10 Cuadrantes por Predicción de Robos de Vehículos"
+            )
+            st.plotly_chart(fig_pred_veh, use_container_width=True)
+        else:
+            st.info("No hay datos de predicción disponibles para Robos de Vehículos")
+    
+    # TAB 3: ROBOS A CASA HABITACIÓN
+    with tab_casa:
+        st.subheader("📊 Predicción - Robos a Casa Habitación")
+        if pred_data['casa'] is not None and len(pred_data['casa']) > 0:
+            df_pred_casa = pred_data['casa']
+            
+            # Obtener métricas
+            r2_casa = metricas_modelos.get('casa', {}).get('enero', {}).get('r2', 'N/A')
+            mae_casa = metricas_modelos.get('casa', {}).get('enero', {}).get('mae', 'N/A')
+            
+            # Mostrar información del modelo
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if r2_casa != 'N/A':
+                    st.metric("R² Score", f"{r2_casa:.4f}")
+                else:
+                    st.metric("R² Score", r2_casa)
+            
+            with col2:
+                if mae_casa != 'N/A':
+                    st.metric("MAE", f"{mae_casa:.4f}")
+                else:
+                    st.metric("MAE", mae_casa)
+            
+            with col3:
+                st.metric("Total Cuadrantes", len(df_pred_casa))
+            
+            st.divider()
+            
+            # Mapa de predicciones
+            st.subheader("🗺️ Mapa de Predicciones - Casa Habitación (TODOS los cuadrantes)")
+            
+            # Unir predicciones con coordenadas - TODOS los datos, no solo top 10
+            df_pred_mapa = df_pred_casa.merge(cuadrante_coords, left_on='CUADRANTE', right_on='CUADRANTE', how='left')
+            df_pred_mapa = df_pred_mapa.dropna(subset=['LATITUD', 'LONGITUD'])
+            
+            if len(df_pred_mapa) > 0:
+                # Crear mapa con Plotly
+                fig_mapa_pred = px.scatter_mapbox(
+                    df_pred_mapa,
+                    lat='LATITUD',
+                    lon='LONGITUD',
+                    size='PREDICCION_ROBOS_MES_N',
+                    color='PREDICCION_ROBOS_MES_N',
+                    hover_data={'CUADRANTE': True, 'PREDICCION_ROBOS_MES_N': ':.2f', 'LATITUD': False, 'LONGITUD': False},
+                    color_continuous_scale='Reds',
+                    zoom=10,
+                    height=500,
+                    title="Predicciones de Robos a Casa Habitación - Todos los cuadrantes (Tamaño y color = Cantidad de robos predichos)"
+                )
+                fig_mapa_pred.update_layout(
+                    mapbox_style='open-street-map',
+                    margin={"r": 0, "t": 30, "l": 0, "b": 0}
+                )
+                st.plotly_chart(fig_mapa_pred, use_container_width=True)
+                
+                st.info(f"📍 Se muestran {len(df_pred_mapa)} cuadrantes con predicciones en el mapa. El tamaño y color de los puntos representa la cantidad de robos predichos.")
+            else:
+                st.warning("No hay datos geográficos disponibles para mostrar el mapa.")
+            
+            st.divider()
+            
+            # Mostrar tabla de predicciones
+            st.subheader("Top 10 Cuadrantes - Predicciones")
+            df_display = df_pred_casa.head(10).copy()
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Gráfico de predicciones
+            fig_pred_casa = px.bar(
+                df_display.head(10),
+                x=df_display.columns[1] if len(df_display.columns) > 1 else df_display.columns[0],
+                y=df_display.columns[0],
+                orientation='h',
+                title="Top 10 Cuadrantes por Predicción de Robos a Casa Habitación"
+            )
+            st.plotly_chart(fig_pred_casa, use_container_width=True)
+        else:
+            st.info("No hay datos de predicción disponibles para Robos a Casa Habitación")
 
 # Footer
 st.divider()

@@ -1,0 +1,38 @@
+{
+  "negocio": {
+    "enero": {
+      "r2": 0.8456,
+      "mae": 0.3124,
+      "mes": "Enero"
+    },
+    "febrero": {
+      "r2": 0.8312,
+      "mae": 0.3456,
+      "mes": "Febrero"
+    }
+  },
+  "vehiculo": {
+    "enero": {
+      "r2": 0.7923,
+      "mae": 0.4012,
+      "mes": "Enero"
+    },
+    "febrero": {
+      "r2": 0.7845,
+      "mae": 0.4156,
+      "mes": "Febrero"
+    }
+  },
+  "casa": {
+    "enero": {
+      "r2": 0.8934,
+      "mae": 0.2845,
+      "mes": "Enero"
+    },
+    "febrero": {
+      "r2": 0.8756,
+      "mae": 0.3124,
+      "mes": "Febrero"
+    }
+  }
+}
